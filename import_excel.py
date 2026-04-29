@@ -11,7 +11,7 @@ import pyodbc
 from datetime import datetime
 from config import Config
 
-XLSX_PATH = r'C:\Users\ITPORTA\Downloads\SIS.PHA.REG.026 - Mantenimiento de cerraduras electrónicas.xlsx'
+XLSX_PATH = r'C:\'
 
 # T1=Q1  T2=Q2  T3=Q3  T4=Q4  (todos año 2025)
 SHEET_QUARTERS = {'T1': 1, 'T2': 2, 'T3': 3, 'T4': 4}
