@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Log Batería{% endblock %}
+{% block page_title %}Registrar Lectura de Batería{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:600px;margin:0 auto;">
+  <div class="card-header">🔋 Nueva Lectura de Batería</div>
+  <div class="card-body">
+    <div class="card mb-16" style="background:var(--bg2);border-color:var(--border2);padding:12px 14px;">
+      <p class="text-small text-muted">
+        <strong class="text-blue">Fórmula:</strong> 3 baterías AA ·
+        Nuevo: <span class="mono">4.5V = 100%</span> ·
+        Agotado: <span class="mono">2.7V = 0%</span><br>
+        Ingresa la suma total de voltaje de las 3 baterías.
+      </p>
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="next" value="{{ request.referrer or '' }}">
+
+      {% if lock %}
+      <input type="hidden" name="lock_id" value="{{ lock.id }}">
+      <div class="card mb-16" style="background:var(--bg2);">
+        <div class="card-body" style="padding:10px 14px;">
+          <div class="d-flex align-center gap-8">
+            <span class="mono text-blue" style="font-size:1.1rem;font-weight:700;">{{ lock.room_code }}</span>
+            {% if lock.room_name %}<span class="td-muted">— {{ lock.room_name }}</span>{% endif %}
+            <span class="badge badge-info ml-auto">{{ lock.sector_name }}</span>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="form-group mb-16">
+        <label>Cerradura *</label>
+        <select name="lock_id" required>
+          <option value="">— Seleccionar —</option>
+          {% for lk in locks %}
+          <option value="{{ lk.id }}">
+            [{{ lk.sector_code }}] {{ lk.room_code }}{% if lk.room_name %} — {{ lk.room_name }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input type="date" name="reading_date" required value="{{ today }}">
+        </div>
+        <div class="form-group">
+          <label>Técnico</label>
+          <input type="text" name="technician" placeholder="Tu nombre…">
+        </div>
+      </div>
+
+      <!-- VOLTAGE INPUT WITH LIVE PREVIEW -->
+      <div class="card mt-8 mb-8" style="background:var(--bg2);">
+        <div class="card-body" style="padding:16px;">
+          <div class="form-group">
+            <label>Voltaje Total (V) *</label>
+            <input type="number" id="voltage-input" name="voltage"
+                   step="0.01" min="0" max="5" required
+                   placeholder="ej. 3.90"
+                   style="font-size:1.4rem;text-align:center;font-family:Consolas,monospace;">
+          </div>
+          <div style="text-align:center;padding:16px 0;">
+            <div class="battery-widget" style="justify-content:center;gap:16px;">
+              <div class="battery-shell" id="battery-preview" style="width:90px;height:40px;">
+                <div class="battery-fill muted" style="width:0%;height:100%;"></div>
+              </div>
+            </div>
+            <div class="battery-pct muted" id="battery-pct-display" style="font-size:3rem;margin-top:12px;">—%</div>
+            <div class="text-muted text-small mt-4" id="battery-status-text">Ingresa el voltaje</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group mt-8">
+        <div class="toggle-wrap">
+          <input type="checkbox" name="batteries_changed" class="toggle" id="chk-changed">
+          <label for="chk-changed" style="font-size:0.875rem;text-transform:none;letter-spacing:0;">
+            🔋 Se cambiaron las baterías en este mantenimiento
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group mt-8">
+        <label>Notas</label>
+        <textarea name="notes" rows="2" placeholder="Sarro en contactos, porta-baterías dañado…"></textarea>
+      </div>
+
+      <div class="d-flex gap-8 mt-16">
+        <a href="{{ url_for('batteries.index') }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-primary">💾 Guardar Lectura</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Enhanced battery status text
+const statusTexts = {
+  success: '✅ Batería en buen estado',
+  'warning-light': '🟡 Batería aceptable',
+  warning: '⚠️ Batería baja — planificar cambio',
+  danger: '🚨 Batería crítica — cambiar inmediatamente',
+  muted: 'Ingresa el voltaje'
+};
+
+const voltInput = document.getElementById('voltage-input');
+const statusText = document.getElementById('battery-status-text');
+
+if (voltInput && statusText) {
+  voltInput.addEventListener('input', () => {
+    const v = parseFloat(voltInput.value);
+    if (isNaN(v)) { statusText.textContent = 'Ingresa el voltaje'; return; }
+
+    const MAX_V = {{ max_v }}, MIN_V = {{ min_v }};
+    const pct = Math.max(0, Math.min(100, Math.round((v - MIN_V) / (MAX_V - MIN_V) * 100)));
+    const color = pct >= 75 ? 'success' : pct >= 50 ? 'warning-light' : pct >= 25 ? 'warning' : 'danger';
+
+    const fill = document.querySelector('#battery-preview .battery-fill');
+    if (fill) { fill.style.width = pct + '%'; fill.className = `battery-fill ${color}`; }
+
+    const display = document.getElementById('battery-pct-display');
+    if (display) { display.textContent = pct + '%'; display.className = `battery-pct ${color}`; }
+
+    statusText.textContent = statusTexts[color] || '';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}Mantenimiento Q{{ q }} {{ yr }}{% endblock %}
+{% block page_title %}Mantenimiento — Q{{ q }} {{ yr }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('reports.quarterly_excel') }}?quarter={{ q }}&year={{ yr }}"
+   class="btn btn-outline btn-sm">📥 Excel</a>
+<a href="{{ url_for('maintenance.form') }}?quarter={{ q }}&year={{ yr }}"
+   class="btn btn-primary btn-sm">🔧 Registrar</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STATS ──────────────────────────────────── -->
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:16px;">
+  <div class="stat-card blue">
+    <div class="stat-label">Programadas</div>
+    <div class="stat-value">{{ total }}</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-label">Realizadas</div>
+    <div class="stat-value">{{ done }}</div>
+  </div>
+  <div class="stat-card {% if pending > 0 %}yellow{% else %}green{% endif %}">
+    <div class="stat-label">Pendientes</div>
+    <div class="stat-value">{{ pending }}</div>
+  </div>
+  <div class="stat-card {% if done >= total and total > 0 %}green{% else %}blue{% endif %}">
+    <div class="stat-label">Progreso</div>
+    <div class="stat-value">{{ ((done / total * 100) | round | int) if total else 0 }}%</div>
+  </div>
+</div>
+
+<!-- ── PROGRESS + GRÁFICA ────────────────────── -->
+{% if total > 0 %}
+<div class="section-row mb-16">
+  <div class="card" style="flex:1;">
+    <div class="card-body" style="padding:12px 18px;">
+      <div class="d-flex align-center gap-8 mb-8">
+        <span class="text-muted">{{ done }} / {{ total }} cerraduras</span>
+        {% set pct = ((done / total * 100) | round | int) if total else 0 %}
+        <span class="mono fw-600 ml-auto text-{% if pct >= 80 %}green{% elif pct >= 40 %}yellow{% else %}red{% endif %}">{{ pct }}%</span>
+      </div>
+      <div class="progress">
+        <div class="progress-bar {% if pct >= 80 %}green{% elif pct >= 40 %}yellow{% else %}red{% endif %}"
+             style="width:{{ pct }}%"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="flex:2;">
+    <div class="card-header" style="font-size:0.82rem;">Por Sector</div>
+    <div class="card-body" style="padding:8px;">
+      <div class="chart-container" style="height:120px;">
+        <canvas id="chart-sector-maint"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── FILTROS ────────────────────────────────── -->
+<div class="filter-bar">
+  <form method="get" style="display:contents">
+    <select name="quarter" onchange="this.form.submit()">
+      {% for qi in range(1, 5) %}
+      <option value="{{ qi }}" {% if qi == q %}selected{% endif %}>Trimestre {{ qi }}</option>
+      {% endfor %}
+    </select>
+    <select name="year" onchange="this.form.submit()">
+      {% for yi in years %}
+      <option value="{{ yi }}" {% if yi == yr %}selected{% endif %}>{{ yi }}</option>
+      {% endfor %}
+    </select>
+    <select name="sector_id" onchange="this.form.submit()">
+      <option value="">Todos los sectores</option>
+      {% for s in sectors %}
+      <option value="{{ s.id }}" {% if current_sector == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <button id="quick-save-all" class="btn btn-success btn-sm ml-auto">💾 Guardar Todo</button>
+</div>
+
+<!-- ── TABLA ──────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap">
+    {% if records %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Sector</th>
+          <th>Habitación</th>
+          <th>Fecha</th>
+          <th>Hora</th>
+          <th>Técnico</th>
+          <th>Supervisor</th>
+          <th>Estado</th>
+          <th>Anotaciones</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr data-lock-id="{{ r.lock_id }}" data-quarter="{{ q }}" data-year="{{ yr }}"
+            class="{% if r.status == 'Realizado' %}maint-row-done{% elif r.status == 'Pospuesto' %}maint-row-post{% endif %}">
+          <td class="td-muted mono text-small">{{ loop.index }}</td>
+          <td class="td-muted text-small">{{ r.sector_code }}</td>
+          <td>
+            <a href="{{ url_for('locks.detail', lock_id=r.lock_id) }}" class="td-mono text-blue">
+              {{ r.room_code }}
+            </a>
+            {% if r.room_name %}<div class="text-small text-muted">{{ r.room_name }}</div>{% endif %}
+          </td>
+          <td>
+            <input type="date" data-field="maintenance_date"
+                   value="{{ r.maintenance_date.isoformat() if r.maintenance_date else '' }}"
+                   style="width:130px;">
+          </td>
+          <td>
+            <input type="time" data-field="maintenance_time"
+                   value="{{ r.maintenance_time.strftime('%H:%M') if r.maintenance_time else '' }}"
+                   style="width:90px;">
+          </td>
+          <td>
+            <input type="text" data-field="technician"
+                   value="{{ r.technician or '' }}" placeholder="Técnico…" style="width:110px;">
+          </td>
+          <td>
+            <input type="text" data-field="supervisor"
+                   value="{{ r.supervisor or '' }}" placeholder="Supervisor…" style="width:110px;">
+          </td>
+          <td>
+            <select data-field="status" style="width:110px;">
+              <option value="" {% if not r.status %}selected{% endif %}>— Pendiente —</option>
+              <option value="Realizado" {% if r.status == 'Realizado' %}selected{% endif %}>✓ Realizado</option>
+              <option value="Pospuesto" {% if r.status == 'Pospuesto' %}selected{% endif %}>Pospuesto</option>
+            </select>
+          </td>
+          <td>
+            <input type="text" data-field="annotations"
+                   value="{{ r.annotations or '' }}" placeholder="Notas…" style="width:180px;">
+          </td>
+          <td>
+            <a href="{{ url_for('maintenance.form') }}?lock_id={{ r.lock_id }}&quarter={{ q }}&year={{ yr }}"
+               class="btn btn-ghost btn-sm" title="Formulario completo">📋</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">🔧</div>
+        <p>No hay cerraduras programadas para este trimestre / sector.</p>
+        <a href="{{ url_for('sectors.index') }}" class="btn btn-outline btn-sm mt-8">
+          Configurar sectores →
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Gráfica progreso por sector ───────────────────────────────────────────
+const sp = {{ sector_prog | tojson }};
+if (sp.length && document.getElementById('chart-sector-maint')) {
+  new Chart(document.getElementById('chart-sector-maint'), {
+    type: 'bar',
+    data: {
+      labels: sp.map(s => s.sector_code),
+      datasets: [
+        { label: 'Realizados', data: sp.map(s => s.done || 0),
+          backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 3 },
+        { label: 'Prog.',      data: sp.map(s => s.total),
+          backgroundColor: 'rgba(59,130,246,0.2)', borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font:{size:10} }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#64748b', font:{size:10} }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

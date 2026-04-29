@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+{% block title %}Baterías{% endblock %}
+{% block page_title %}Monitoreo de Baterías{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('batteries.log') }}" class="btn btn-primary btn-sm">🔋 Log Batería</a>
+<a href="{{ url_for('reports.battery_excel') }}" class="btn btn-outline btn-sm">📥 Reporte Excel</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STAT CARDS ─────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card {% if avg_pct and avg_pct >= 75 %}green{% elif avg_pct and avg_pct >= 25 %}yellow{% else %}red{% endif %}">
+    <span class="stat-icon">🔋</span>
+    <div class="stat-label">Promedio General</div>
+    <div class="stat-value">{{ avg_pct or '—' }}{% if avg_pct %}%{% endif %}</div>
+    <div class="stat-sub">Voltaje 2.7–4.5V</div>
+  </div>
+  <div class="stat-card {% if low_count > 0 %}yellow{% else %}green{% endif %}">
+    <span class="stat-icon">⚠️</span>
+    <div class="stat-label">Batería Baja (&lt;{{ alert_threshold }}%)</div>
+    <div class="stat-value">{{ low_count }}</div>
+    <div class="stat-sub">Cerraduras en alerta</div>
+  </div>
+  <div class="stat-card {% if critical_count > 0 %}red{% else %}green{% endif %}">
+    <span class="stat-icon">🚨</span>
+    <div class="stat-label">Crítico (&lt;10%)</div>
+    <div class="stat-value">{{ critical_count }}</div>
+    <div class="stat-sub">Cambio inmediato</div>
+  </div>
+  <div class="stat-card blue">
+    <span class="stat-icon">📅</span>
+    <div class="stat-label">Vida Prom. Batería</div>
+    <div class="stat-value">{{ (avg_life_days | round | int) if avg_life_days else '—' }}</div>
+    <div class="stat-sub">días entre cambios</div>
+  </div>
+  <div class="stat-card purple">
+    <span class="stat-icon">❓</span>
+    <div class="stat-label">Sin Lectura</div>
+    <div class="stat-value">{{ no_reading }}</div>
+    <div class="stat-sub">Cerraduras sin datos</div>
+  </div>
+  <div class="stat-card {% if stale_count > 0 %}yellow{% else %}green{% endif %}">
+    <span class="stat-icon">🕐</span>
+    <div class="stat-label">Sin Lectura Reciente</div>
+    <div class="stat-value">{{ stale_count }}</div>
+    <div class="stat-sub">+{{ stale_days }} días sin medir</div>
+  </div>
+</div>
+
+<!-- ── GRÁFICA PROMEDIO POR SECTOR ────────────── -->
+{% if sector_stats %}
+<div class="card mb-16">
+  <div class="card-header">📊 Promedio de Batería por Sector</div>
+  <div class="card-body">
+    <div class="chart-container" style="height:180px;">
+      <canvas id="chart-sector-battery"></canvas>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── FILTROS ────────────────────────────────── -->
+<div class="filter-bar">
+  <form method="get" style="display:contents">
+    <select name="sector_id" onchange="this.form.submit()">
+      <option value="">Todos los sectores</option>
+      {% for s in sectors %}
+      <option value="{{ s.id }}" {% if current_sector == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <label class="toggle-wrap" style="cursor:pointer;">
+      <input type="checkbox" name="low" value="1" class="toggle"
+             {% if filter_low == '1' %}checked{% endif %} onchange="this.form.submit()">
+      <span class="text-small">Solo alertas</span>
+    </label>
+    <label class="toggle-wrap" style="cursor:pointer;">
+      <input type="checkbox" name="stale" value="1" class="toggle"
+             {% if filter_stale == '1' %}checked{% endif %} onchange="this.form.submit()">
+      <span class="text-small">Sin lectura reciente (+{{ stale_days }}d)</span>
+    </label>
+    {% if current_sector or filter_low or filter_stale %}
+    <a href="{{ url_for('batteries.index') }}" class="btn btn-ghost btn-sm">✕ Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- ── TABLA ──────────────────────────────────── -->
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sector</th>
+          <th>Habitación</th>
+          <th>Batería</th>
+          <th>Voltaje</th>
+          <th>Última Lectura</th>
+          <th>Días</th>
+          <th>Baterías Cambiadas</th>
+          <th>Técnico</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in readings %}
+        <tr {% if r.stale and r.percentage is not none %}style="opacity:0.75;"{% endif %}>
+          <td class="td-muted">{{ r.sector_name }}</td>
+          <td>
+            <a href="{{ url_for('locks.detail', lock_id=r.lock_id) }}" class="td-mono text-blue">
+              {{ r.room_code }}
+            </a>
+            {% if r.room_name %}<div class="text-small text-muted">{{ r.room_name }}</div>{% endif %}
+          </td>
+          <td>
+            {% if r.percentage is not none %}
+            <div class="battery-widget">
+              <div class="battery-shell">
+                <div class="battery-fill {{ r.color }}" style="width:{{ r.percentage }}%"></div>
+              </div>
+              <span class="battery-pct {{ r.color }}">{{ r.percentage }}%</span>
+            </div>
+            {% else %}
+            <span class="badge badge-muted">Sin lectura</span>
+            {% endif %}
+          </td>
+          <td class="mono text-small">{{ (r.voltage | string + 'V') if r.voltage else '—' }}</td>
+          <td class="td-muted text-small">
+            {{ r.reading_date.strftime('%d/%m/%Y') if r.reading_date else '—' }}
+          </td>
+          <td class="text-small {% if r.stale %}text-orange{% else %}td-muted{% endif %}">
+            {% if r.days_since is not none %}
+              {{ r.days_since }}d
+              {% if r.stale %} ⚠️{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
+            {% if r.batteries_changed %}
+            <span class="badge badge-info">✓</span>
+            {% else %}
+            <span class="td-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="td-muted text-small">{{ r.technician or '—' }}</td>
+          <td>
+            <a href="{{ url_for('batteries.log') }}?lock_id={{ r.lock_id }}" class="btn btn-ghost btn-sm">
+              + Log
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sectorStats = {{ sector_stats | tojson }};
+if (sectorStats.length && document.getElementById('chart-sector-battery')) {
+  new Chart(document.getElementById('chart-sector-battery'), {
+    type: 'bar',
+    data: {
+      labels: sectorStats.map(s => s.sector_code),
+      datasets: [{
+        label: 'Promedio %',
+        data: sectorStats.map(s => s.avg_pct ? Math.round(s.avg_pct) : 0),
+        backgroundColor: sectorStats.map(s => {
+          const p = s.avg_pct || 0;
+          return p >= 75 ? 'rgba(16,185,129,0.7)' : p >= 25 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)';
+        }),
+        borderRadius: 5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { min: 0, max: 100, ticks: { color: '#64748b' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

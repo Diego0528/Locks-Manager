@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Locks Manager{% endblock %} — PHA</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- Sidebar overlay for mobile -->
+<div id="sidebar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;"></div>
+
+<!-- ── SIDEBAR ───────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">🔐</div>
+    <div>
+      <div class="brand-text">Locks Manager</div>
+      <div class="brand-sub">PHA Hotel</div>
+    </div>
+  </div>
+
+  <div class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <a href="{{ url_for('dashboard.index') }}"
+       class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+      <span class="nav-icon">📊</span> Dashboard
+    </a>
+
+    <div class="nav-section">Cerraduras</div>
+    <a href="{{ url_for('locks.index') }}"
+       class="nav-link {% if 'locks.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🔒</span> Cerraduras
+    </a>
+    <a href="{{ url_for('maintenance.index') }}"
+       class="nav-link {% if request.endpoint and 'maintenance.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🔧</span> Mantenimiento
+    </a>
+    <a href="{{ url_for('maintenance.history') }}"
+       class="nav-link {% if request.endpoint == 'maintenance.history' %}active{% endif %}">
+      <span class="nav-icon">📋</span> Historial
+    </a>
+    <a href="{{ url_for('batteries.index') }}"
+       class="nav-link {% if 'batteries.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🔋</span> Baterías
+    </a>
+
+    <div class="nav-section">Reportes</div>
+    <a href="{{ url_for('reports.index') }}"
+       class="nav-link {% if 'reports.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">📄</span> Reportes
+    </a>
+
+    <div class="nav-section">Config</div>
+    <a href="{{ url_for('sectors.index') }}"
+       class="nav-link {% if 'sectors.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🏨</span> Sectores
+    </a>
+    <a href="{{ url_for('locks.add') }}"
+       class="nav-link">
+      <span class="nav-icon">➕</span> Nueva Cerradura
+    </a>
+    <a href="{{ url_for('batteries.log') }}"
+       class="nav-link">
+      <span class="nav-icon">📝</span> Log Batería
+    </a>
+    {% if current_role == 'admin' %}
+    <div class="nav-section">Admin</div>
+    <a href="{{ url_for('admin.users') }}"
+       class="nav-link {% if request.endpoint and 'admin.' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">👥</span> Usuarios
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="sidebar-footer">
+    {% if current_user %}
+    <div style="margin-bottom:8px;font-size:0.8rem;color:var(--text-2);">
+      👤 {{ current_user }}
+    </div>
+    {% endif %}
+    Saflok Model 790<br>
+    <span id="clock-display"></span>
+  </div>
+</nav>
+
+<!-- ── TOPBAR ─────────────────────────────────────────── -->
+<header class="topbar">
+  <button class="menu-toggle" aria-label="Menú">☰</button>
+  <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+  <div class="topbar-actions">
+    {% block topbar_actions %}{% endblock %}
+    {% if current_user %}
+    <a href="{{ url_for('auth.logout') }}"
+       class="btn btn-ghost btn-sm" style="margin-left:8px;font-size:0.8rem;">
+      Salir
+    </a>
+    {% endif %}
+  </div>
+</header>
+
+<!-- ── FLASH MESSAGES ─────────────────────────────────── -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-container">
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }}" onclick="this.remove()">
+    {% if category == 'success' %}✓{% elif category == 'danger' %}✗{% else %}ℹ{% endif %}
+    {{ message }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<!-- ── MAIN ───────────────────────────────────────────── -->
+<main class="main-wrap">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  // Live clock in sidebar
+  function updateClock() {
+    const now = new Date();
+    const d = now.toLocaleDateString('es-GT', {day:'2-digit',month:'short',year:'numeric'});
+    const t = now.toLocaleTimeString('es-GT', {hour:'2-digit',minute:'2-digit'});
+    const el = document.getElementById('clock-display');
+    if (el) el.textContent = `${d}  ${t}`;
+  }
+  updateClock();
+  setInterval(updateClock, 30000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

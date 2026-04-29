@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Historial de Mantenimientos{% endblock %}
+{% block page_title %}Historial Completo de Mantenimientos{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('maintenance.index') }}" class="btn btn-ghost btn-sm">← Vista por Trimestre</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- FILTROS -->
+<div class="filter-bar" style="flex-wrap:wrap;gap:8px;">
+  <form method="get" style="display:contents;">
+    <select name="year" onchange="this.form.submit()">
+      {% for yi in years %}
+      <option value="{{ yi }}" {% if yi == yr %}selected{% endif %}>{{ yi }}</option>
+      {% endfor %}
+    </select>
+    <select name="quarter" onchange="this.form.submit()">
+      <option value="">Todos los trimestres</option>
+      {% for qi in range(1,5) %}
+      <option value="{{ qi }}" {% if q == qi|string %}selected{% endif %}>Q{{ qi }}</option>
+      {% endfor %}
+    </select>
+    <select name="sector_id" onchange="this.form.submit()">
+      <option value="">Todos los sectores</option>
+      {% for s in sectors %}
+      <option value="{{ s.id }}" {% if current_sector == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Todos los estados</option>
+      <option value="Realizado"  {% if current_status == 'Realizado' %}selected{% endif %}>✓ Realizado</option>
+      <option value="Pendiente"  {% if current_status == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+      <option value="Pospuesto"  {% if current_status == 'Pospuesto' %}selected{% endif %}>Pospuesto</option>
+    </select>
+    <input type="text" name="technician" placeholder="Filtrar técnico…"
+           value="{{ current_tech }}" style="width:160px;">
+    <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+    {% if current_sector or q or current_tech or current_status %}
+    <a href="{{ url_for('maintenance.history', year=yr) }}" class="btn btn-ghost btn-sm">✕ Limpiar</a>
+    {% endif %}
+  </form>
+  <span class="td-muted text-small ml-auto" style="align-self:center;">
+    {{ records|length }} registro(s)
+  </span>
+</div>
+
+<!-- TABLA -->
+<div class="card">
+  <div class="table-wrap">
+    {% if records %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Q</th>
+          <th>Sector</th>
+          <th>Hab.</th>
+          <th>Tipo</th>
+          <th>Estado</th>
+          <th>Técnico</th>
+          <th>Supervisor</th>
+          <th>Anotaciones</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr class="{% if r.status == 'Realizado' %}maint-row-done{% elif r.status == 'Pospuesto' %}maint-row-post{% endif %}">
+          <td class="mono text-small">
+            {{ r.maintenance_date.strftime('%d/%m/%Y') if r.maintenance_date else '—' }}
+          </td>
+          <td class="td-muted mono">Q{{ r.quarter }} {{ r.year }}</td>
+          <td class="td-muted text-small">{{ r.sector_code }}</td>
+          <td>
+            <a href="{{ url_for('locks.detail', lock_id=r.lock_id) }}" class="td-mono text-blue">
+              {{ r.room_code }}
+            </a>
+          </td>
+          <td>
+            <span class="badge badge-{% if r.maintenance_type == 'Preventivo' %}info{% else %}warning{% endif %}">
+              {{ r.maintenance_type }}
+            </span>
+          </td>
+          <td>
+            {% if r.status == 'Realizado' %}<span class="badge badge-success">✓ Realizado</span>
+            {% elif r.status == 'Pospuesto' %}<span class="badge badge-muted">Pospuesto</span>
+            {% else %}<span class="badge badge-warning">Pendiente</span>{% endif %}
+          </td>
+          <td class="td-muted text-small">{{ r.technician or '—' }}</td>
+          <td class="td-muted text-small">{{ r.supervisor or '—' }}</td>
+          <td class="td-muted text-small">{{ (r.annotations or '')[:60] }}</td>
+          <td style="white-space:nowrap;">
+            <a href="{{ url_for('maintenance.form') }}?lock_id={{ r.lock_id }}&quarter={{ r.quarter }}&year={{ r.year }}"
+               class="btn btn-ghost btn-sm" title="Editar">✏️</a>
+            <form method="post"
+                  action="{{ url_for('maintenance.delete', record_id=r.id) }}"
+                  style="display:inline;"
+                  onsubmit="return confirm('¿Eliminar este registro?')">
+              <button type="submit" class="btn btn-ghost btn-sm"
+                      style="color:var(--red);" title="Eliminar">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🔧</div>
+      <p>No se encontraron registros con los filtros seleccionados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

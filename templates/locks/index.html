@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Cerraduras{% endblock %}
+{% block page_title %}Cerraduras{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('locks.add') }}" class="btn btn-primary btn-sm">➕ Agregar</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="filter-bar">
+  <form method="get" style="display:contents">
+    <select name="sector_id" onchange="this.form.submit()">
+      <option value="">Todos los sectores</option>
+      {% for s in sectors %}
+      <option value="{{ s.id }}" {% if current_sector == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Todos los estados</option>
+      <option value="active"   {% if current_status == 'active' %}selected{% endif %}>Activas</option>
+      <option value="inactive" {% if current_status == 'inactive' %}selected{% endif %}>Inactivas</option>
+    </select>
+    <input type="search" name="search" placeholder="Buscar habitación…" value="{{ search }}" style="flex:1;min-width:140px;">
+    <button type="submit" class="btn btn-outline btn-sm">🔍 Buscar</button>
+    {% if current_sector or current_status or search %}
+    <a href="{{ url_for('locks.index') }}" class="btn btn-ghost btn-sm">✕ Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    🔒 {{ locks|length }} cerradura{% if locks|length != 1 %}s{% endif %} encontrada{% if locks|length != 1 %}s{% endif %}
+  </div>
+  <div class="table-wrap">
+    {% if locks %}
+    <table>
+      <thead>
+        <tr>
+          <th>Sector</th>
+          <th>Habitación</th>
+          <th>Nombre</th>
+          <th>Modelo</th>
+          <th>Batería</th>
+          <th>Último Manto</th>
+          <th>Eventos</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lk in locks %}
+        <tr class="{% if not lk.active %}maint-row-post{% endif %}">
+          <td class="td-muted">{{ lk.sector_code }}</td>
+          <td><a href="{{ url_for('locks.detail', lock_id=lk.id) }}" class="td-mono text-blue">{{ lk.room_code }}</a></td>
+          <td class="td-muted text-small">{{ lk.room_name or '—' }}</td>
+          <td class="td-muted">{{ lk.model }}</td>
+          <td>
+            {% if lk.last_battery_pct is not none %}
+            <div class="battery-widget">
+              <div class="battery-shell">
+                <div class="battery-fill {{ lk.battery_color }}" style="width:{{ lk.last_battery_pct }}%"></div>
+              </div>
+              <span class="battery-pct {{ lk.battery_color }}">{{ lk.last_battery_pct }}%</span>
+            </div>
+            {% else %}
+            <span class="text-muted text-small">Sin lectura</span>
+            {% endif %}
+          </td>
+          <td class="td-muted text-small">
+            {{ lk.last_maint.strftime('%d/%m/%Y') if lk.last_maint else '—' }}
+          </td>
+          <td>
+            {% if lk.open_events > 0 %}
+            <span class="badge badge-danger">{{ lk.open_events }} abierto{{ 's' if lk.open_events != 1 }}</span>
+            {% else %}
+            <span class="status-dot green"></span>
+            {% endif %}
+          </td>
+          <td>
+            {% if lk.active %}
+            <span class="badge badge-success">Activa</span>
+            {% else %}
+            <span class="badge badge-muted">Inactiva</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('locks.detail', lock_id=lk.id) }}" class="btn btn-ghost btn-sm">Ver →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">🔒</div>
+        <p>No se encontraron cerraduras con ese filtro.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

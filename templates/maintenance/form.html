@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+{% block title %}Formulario Mantenimiento{% endblock %}
+{% block page_title %}
+  {% if lock %}Mantenimiento — {{ lock.room_code }}
+  {% else %}Registrar Mantenimiento{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:720px;margin:0 auto;">
+  <div class="card-header">
+    🔧 Formulario de Mantenimiento
+    {% if existing %}
+    <span class="badge badge-info ml-auto">Editando registro existente</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <form method="post" id="maint-form">
+
+      <!-- LOCK SELECTOR -->
+      {% if not lock %}
+      <div class="form-group mb-16">
+        <label>Habitación *</label>
+        <div style="position:relative;">
+          <input type="text" id="lock-search-input" autocomplete="off"
+                 placeholder="Escribe o desplaza para buscar habitación…"
+                 style="width:100%;" required>
+          <input type="hidden" name="lock_id" id="lock-id-hidden">
+          <div id="lock-dropdown-list"
+               style="display:none;position:absolute;z-index:200;width:100%;
+                      background:var(--card2);border:1px solid var(--border2);
+                      border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;">
+          </div>
+        </div>
+        <div id="lock-search-hint" class="text-muted text-small mt-4" style="display:none;">
+          Selecciona una habitación de la lista
+        </div>
+      </div>
+      {% else %}
+      <input type="hidden" name="lock_id" value="{{ lock.id }}">
+      <div class="card mb-16" style="background:var(--bg2);border-color:var(--border2);">
+        <div class="card-body" style="padding:12px;">
+          <div class="d-flex align-center gap-12">
+            <span class="mono text-blue" style="font-size:1.2rem;font-weight:700;">{{ lock.room_code }}</span>
+            {% if lock.room_name %}<span class="td-muted"> — {{ lock.room_name }}</span>{% endif %}
+            <span class="badge badge-info">{{ lock.sector_name }}</span>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- TRIMESTRE / AÑO / FECHA / HORA -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Trimestre</label>
+          <select name="quarter">
+            {% for qi in range(1, 5) %}
+            <option value="{{ qi }}" {% if qi == q %}selected{% endif %}>Trimestre {{ qi }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Año</label>
+          <select name="year">
+            {% for yi in range(2023, 2028) %}
+            <option value="{{ yi }}" {% if yi == yr %}selected{% endif %}>{{ yi }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input type="date" name="maintenance_date" required
+                 value="{{ existing.maintenance_date.isoformat() if existing and existing.maintenance_date else today }}">
+        </div>
+        <div class="form-group">
+          <label>Hora</label>
+          <input type="time" name="maintenance_time" id="time-input"
+                 value="{{ existing.maintenance_time.strftime('%H:%M') if existing and existing.maintenance_time else current_time }}">
+        </div>
+        <div class="form-group">
+          <label>Tipo</label>
+          <select name="maintenance_type">
+            <option value="Preventivo" {% if not existing or existing.maintenance_type == 'Preventivo' %}selected{% endif %}>Preventivo</option>
+            <option value="Correctivo" {% if existing and existing.maintenance_type == 'Correctivo' %}selected{% endif %}>Correctivo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Estado</label>
+          <select name="status">
+            <option value="Realizado" {% if not existing or existing.status == 'Realizado' %}selected{% endif %}>✓ Realizado</option>
+            <option value="Pendiente" {% if existing and existing.status == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+            <option value="Pospuesto" {% if existing and existing.status == 'Pospuesto' %}selected{% endif %}>Pospuesto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Técnico</label>
+          <input type="text" name="technician" placeholder="Nombre del técnico"
+                 value="{{ existing.technician if existing else technician_default }}">
+        </div>
+        <div class="form-group">
+          <label>Supervisado por</label>
+          <input type="text" name="supervisor" placeholder="Supervisor"
+                 value="{{ existing.supervisor if existing else default_supervisor }}">
+        </div>
+      </div>
+
+      <div class="form-group mt-8">
+        <label>Anotaciones</label>
+        <textarea name="annotations" rows="3"
+                  placeholder="En buen estado. / Contactos gastados. / Sin empaque negro. / Sarro en contactos…">{{ existing.annotations if existing else '' }}</textarea>
+      </div>
+
+      <!-- BATERÍA — se guarda junto con el mantenimiento -->
+      <div class="card mt-16" style="background:var(--bg2);">
+        <div class="card-header" style="font-size:0.85rem;">
+          🔋 Lectura de Batería
+        </div>
+        <div class="card-body">
+          <p class="text-muted text-small mb-8">
+            3 baterías AA · Voltaje total: 4.5V = 100% | 2.7V = 0% · Deja en blanco si no mides hoy.
+          </p>
+          <!-- Última lectura registrada (se actualiza vía JS) -->
+          <div id="last-battery-info" style="display:none;"
+               class="card mb-12" style="background:var(--bg);border-color:var(--border2);">
+            <div class="card-body" style="padding:10px 14px;font-size:0.85rem;">
+              <span class="td-muted">Última lectura: </span>
+              <span id="lb-voltage" class="mono"></span>
+              <span id="lb-pct" class="mono fw-600"></span>
+              <span class="td-muted"> — hace </span>
+              <span id="lb-days" class="mono"></span>
+              <span class="td-muted"> días — por </span>
+              <span id="lb-tech" class="td-muted"></span>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Voltaje Total (V)</label>
+              <input type="number" name="battery_voltage" id="voltage-input"
+                     step="0.01" min="0" max="5" placeholder="ej. 3.90">
+            </div>
+            <div class="form-group">
+              <label>Nivel estimado</label>
+              <div class="battery-widget" style="padding:8px 0;">
+                <div class="battery-shell" id="battery-preview" style="width:60px;height:28px;">
+                  <div class="battery-fill muted" style="width:0%"></div>
+                </div>
+                <span class="battery-pct muted" id="battery-pct-display">—%</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group mt-8">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" name="batteries_changed" value="1"
+                     style="width:16px;height:16px;">
+              Se cambiaron las baterías durante este mantenimiento
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-8 mt-16">
+        <a href="{{ url_for('maintenance.index', quarter=q, year=yr) }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-primary">💾 {{ 'Actualizar' if existing else 'Guardar' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Validación: asegurar que se seleccionó cerradura antes de enviar ──────
+{% if not lock %}
+const lockHidden = document.getElementById('lock-id-hidden');
+const lockSearch = document.getElementById('lock-search-input');
+const lockHint   = document.getElementById('lock-search-hint');
+
+document.getElementById('maint-form').addEventListener('submit', function(e) {
+  if (!lockHidden.value) {
+    e.preventDefault();
+    lockSearch.style.borderColor = 'var(--red)';
+    lockHint.style.display = 'block';
+    lockSearch.focus();
+  }
+});
+
+// ── Datos de cerraduras ───────────────────────────────────────────────────
+const locksData = {{ locks | tojson }};
+
+function renderDropdown(items) {
+  const dd = document.getElementById('lock-dropdown-list');
+  dd.innerHTML = '';
+  if (!items.length) { dd.style.display = 'none'; return; }
+  items.forEach(lk => {
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.9rem;';
+    div.textContent = lk.room_code + (lk.room_name ? '  —  ' + lk.room_name : '');
+    div.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      lockSearch.value = lk.room_code + (lk.room_name ? '  —  ' + lk.room_name : '');
+      lockHidden.value = lk.id;
+      lockSearch.style.borderColor = '';
+      lockHint.style.display = 'none';
+      dd.style.display = 'none';
+    });
+    div.addEventListener('mouseover', function() { this.style.background = 'var(--border2)'; });
+    div.addEventListener('mouseout',  function() { this.style.background = ''; });
+    dd.appendChild(div);
+  });
+  dd.style.display = 'block';
+}
+
+lockSearch.addEventListener('focus', function() {
+  const q = this.value.trim().toLowerCase();
+  const list = q
+    ? locksData.filter(l => l.room_code.toLowerCase().includes(q) || (l.room_name||'').toLowerCase().includes(q))
+    : locksData;
+  renderDropdown(list);
+});
+
+lockSearch.addEventListener('input', function() {
+  lockHidden.value = '';
+  const q = this.value.trim().toLowerCase();
+  const list = q
+    ? locksData.filter(l => l.room_code.toLowerCase().includes(q) || (l.room_name||'').toLowerCase().includes(q))
+    : locksData;
+  renderDropdown(list);
+});
+
+lockSearch.addEventListener('blur', function() {
+  setTimeout(() => {
+    document.getElementById('lock-dropdown-list').style.display = 'none';
+  }, 150);
+});
+
+// ── Cargar última batería al seleccionar cerradura ────────────────────────
+async function loadLastBattery(lockId) {
+  if (!lockId) { document.getElementById('last-battery-info').style.display = 'none'; return; }
+  try {
+    const resp = await fetch(`/batteries/api/latest/${lockId}`);
+    const data = await resp.json();
+    const box = document.getElementById('last-battery-info');
+    if (!data) { box.style.display = 'none'; return; }
+    document.getElementById('lb-voltage').textContent = data.voltage + 'V  ';
+    document.getElementById('lb-pct').textContent = data.percentage + '%';
+    document.getElementById('lb-days').textContent = data.days_ago ?? '?';
+    document.getElementById('lb-tech').textContent = data.technician || '—';
+    box.style.display = 'block';
+    box.style.background = 'var(--bg)';
+    box.style.borderColor = 'var(--border2)';
+    box.style.borderRadius = '6px';
+    box.style.marginBottom = '12px';
+  } catch { document.getElementById('last-battery-info').style.display = 'none'; }
+}
+
+// Conectar al evento de selección de cerradura
+document.getElementById('lock-dropdown-list').addEventListener('mousedown', function() {
+  setTimeout(() => loadLastBattery(document.getElementById('lock-id-hidden').value), 50);
+});
+{% endif %}
+
+{% if lock %}
+// Si la cerradura ya está fija, cargar batería de inmediato
+loadLastBattery && loadLastBattery({{ lock.id }});
+{% endif %}
+</script>
+{% endblock %}

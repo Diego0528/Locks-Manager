@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Cerradura{% endblock %}
+{% block page_title %}Nueva Cerradura{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px;margin:0 auto;">
+  <div class="card-header">🔒 Agregar Cerradura</div>
+  <div class="card-body">
+    <form method="post">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Sector *</label>
+          <select name="sector_id" required>
+            <option value="">— Seleccionar —</option>
+            {% for s in sectors %}
+            <option value="{{ s.id }}" {% if form.get('sector_id') == s.id|string %}selected{% endif %}>
+              {{ s.code }} — {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Código Habitación *</label>
+          <input type="text" name="room_code" required value="{{ form.get('room_code','') }}"
+                 placeholder="420, SL1, GYM…" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+          <label>Nombre (opcional)</label>
+          <input type="text" name="room_name" value="{{ form.get('room_name','') }}"
+                 placeholder="Salón Landívar 1…">
+        </div>
+        <div class="form-group">
+          <label>Modelo</label>
+          <input type="text" name="model" value="{{ form.get('model','790') }}">
+        </div>
+        <div class="form-group">
+          <label>N° de Serie</label>
+          <input type="text" name="serial_number" value="{{ form.get('serial_number','') }}">
+        </div>
+        <div class="form-group">
+          <label>Fecha de Instalación</label>
+          <input type="date" name="installation_date" value="{{ form.get('installation_date','') }}">
+        </div>
+      </div>
+      <div class="form-group mt-8">
+        <label>Notas</label>
+        <textarea name="notes" rows="2">{{ form.get('notes','') }}</textarea>
+      </div>
+      <div class="d-flex gap-8 mt-16">
+        <a href="{{ url_for('locks.index') }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-primary">💾 Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

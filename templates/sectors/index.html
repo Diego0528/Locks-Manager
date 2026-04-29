@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Sectores{% endblock %}
+{% block page_title %}Configuración de Sectores{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" data-open-modal="modal-add-sector">➕ Nuevo Sector</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-header">🏨 Sectores del Hotel</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Descripción</th>
+          <th>Cerraduras</th>
+          <th>Trimestres</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sectors %}
+        <tr class="{% if not s.active %}maint-row-post{% endif %}">
+          <td class="td-mono">{{ s.code }}</td>
+          <td class="fw-600">{{ s.name }}</td>
+          <td class="td-muted text-small">{{ s.description or '—' }}</td>
+          <td class="td-muted text-center">{{ s.lock_count }}</td>
+          <td>
+            {% if s.quarters %}
+              {% for qi in s.quarters.split(', ') %}
+              <span class="badge badge-info">Q{{ qi }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="td-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.active %}
+            <span class="badge badge-success">Activo</span>
+            {% else %}
+            <span class="badge badge-muted">Inactivo</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-ghost btn-sm" data-open-modal="modal-edit-{{ s.id }}">✏️ Editar</button>
+            <form method="post" action="{{ url_for('sectors.toggle', sid=s.id) }}" style="display:inline;">
+              <button class="btn btn-ghost btn-sm" data-confirm="¿Cambiar estado del sector?">
+                {{ '🔴' if s.active else '🟢' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-16">
+  <div class="card-header">ℹ️ Sobre la Configuración de Trimestres</div>
+  <div class="card-body text-muted text-small">
+    <p>Cada sector se puede asignar a uno o más trimestres de mantenimiento.</p>
+    <p class="mt-8">Ejemplo típico:</p>
+    <ul style="margin:8px 0 0 16px;">
+      <li>Sectores 100 y 300 → Q1 y Q3</li>
+      <li>Sectores 200, 400 y 500 → Q2 y Q4</li>
+    </ul>
+    <p class="mt-8">Al agregar un sector nuevo, solo configura su código, nombre y trimestres — sin tocar el código.</p>
+  </div>
+</div>
+
+<!-- ── MODAL ADD SECTOR ───────────────────────── -->
+<div id="modal-add-sector" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      ➕ Nuevo Sector
+      <button data-close-modal="modal-add-sector" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('sectors.add') }}">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Código *</label>
+            <input type="text" name="code" required placeholder="100, 600, SPA…"
+                   style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Nombre *</label>
+            <input type="text" name="name" required placeholder="Sector Seiscientos">
+          </div>
+        </div>
+        <div class="form-group mt-8">
+          <label>Descripción</label>
+          <input type="text" name="description" placeholder="Habitaciones 600, Piscina…">
+        </div>
+        <div class="form-group mt-12">
+          <label>Trimestres de Mantenimiento</label>
+          <p class="text-muted text-small mb-8">Selecciona en cuáles trimestres se realiza el mantenimiento.</p>
+          <div class="quarter-grid">
+            {% for qi in range(1, 5) %}
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+                          padding:8px;border:1px solid var(--border);border-radius:var(--radius);
+                          background:var(--bg2);">
+              <input type="checkbox" name="quarters" value="{{ qi }}">
+              <span class="text-small">Q{{ qi }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-add-sector" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Crear Sector</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── MODALES EDIT SECTOR ────────────────────── -->
+{% for s in sectors %}
+<div id="modal-edit-{{ s.id }}" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      ✏️ Editar Sector {{ s.code }}
+      <button data-close-modal="modal-edit-{{ s.id }}" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('sectors.edit', sid=s.id) }}">
+      <div class="modal-body">
+        <div class="form-group mb-8">
+          <label>Nombre *</label>
+          <input type="text" name="name" required value="{{ s.name }}">
+        </div>
+        <div class="form-group mb-12">
+          <label>Descripción</label>
+          <input type="text" name="description" value="{{ s.description or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Trimestres de Mantenimiento</label>
+          <p class="text-muted text-small mb-8">Cambia en cuáles trimestres se realiza el mantenimiento de este sector.</p>
+          <div class="quarter-grid">
+            {% set active_q = s.quarters.split(', ') if s.quarters else [] %}
+            {% for qi in range(1, 5) %}
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+                          padding:8px;border:1px solid var(--border);border-radius:var(--radius);
+                          background:var(--bg2);">
+              <input type="checkbox" name="quarters" value="{{ qi }}"
+                     {% if qi|string in active_q %}checked{% endif %}>
+              <span class="text-small">Q{{ qi }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-edit-{{ s.id }}" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

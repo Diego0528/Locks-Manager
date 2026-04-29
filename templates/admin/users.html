@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios{% endblock %}
+{% block page_title %}Gestión de Usuarios{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" data-open-modal="modal-add-user">➕ Nuevo Usuario</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="table-wrap">
+    {% if users %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Usuario</th>
+          <th>Nombre Completo</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="td-muted mono text-small">{{ u.id }}</td>
+          <td class="mono text-blue">{{ u.username }}</td>
+          <td>{{ u.full_name }}</td>
+          <td>
+            <span class="badge badge-{% if u.role == 'admin' %}danger{% else %}info{% endif %}">
+              {{ u.role }}
+            </span>
+          </td>
+          <td>
+            {% if u.active %}
+              <span class="badge badge-success">● Activo</span>
+            {% else %}
+              <span class="badge badge-muted">● Inactivo</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-ghost btn-sm"
+                    data-open-modal="modal-edit-{{ u.id }}">✏️</button>
+            <form method="post" action="{{ url_for('admin.toggle_user', user_id=u.id) }}"
+                  style="display:inline;">
+              <button type="submit" class="btn btn-ghost btn-sm"
+                      title="{{ 'Desactivar' if u.active else 'Activar' }}">
+                {{ '🔴' if u.active else '🟢' }}
+              </button>
+            </form>
+            {% if u.id != current_user_id %}
+            <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}"
+                  style="display:inline;"
+                  onsubmit="return confirm('¿Eliminar al usuario {{ u.full_name }}?')">
+              <button type="submit" class="btn btn-ghost btn-sm"
+                      style="color:var(--red);">🗑</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">👤</div>
+      <p>No hay usuarios registrados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal: Agregar usuario -->
+<div id="modal-add-user" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      👤 Nuevo Usuario
+      <button data-close-modal="modal-add-user" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('admin.add_user') }}">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Usuario (login)</label>
+            <input type="text" name="username" required placeholder="ej. diego"
+                   style="text-transform:lowercase;">
+          </div>
+          <div class="form-group">
+            <label>Contraseña</label>
+            <input type="text" name="password" required placeholder="contraseña">
+          </div>
+          <div class="form-group">
+            <label>Nombre Completo</label>
+            <input type="text" name="full_name" required placeholder="Diego Andrino">
+          </div>
+          <div class="form-group">
+            <label>Rol</label>
+            <select name="role">
+              <option value="technician">Técnico</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-add-user" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear Usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modales de edición por usuario -->
+{% for u in users %}
+<div id="modal-edit-{{ u.id }}" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      ✏️ Editar — {{ u.full_name }}
+      <button data-close-modal="modal-edit-{{ u.id }}" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('admin.edit_user', user_id=u.id) }}">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Usuario</label>
+            <input type="text" value="{{ u.username }}" disabled
+                   style="opacity:0.5;cursor:not-allowed;">
+          </div>
+          <div class="form-group">
+            <label>Nueva Contraseña <span class="td-muted">(dejar vacío = no cambiar)</span></label>
+            <input type="text" name="password" placeholder="nueva contraseña">
+          </div>
+          <div class="form-group">
+            <label>Nombre Completo</label>
+            <input type="text" name="full_name" value="{{ u.full_name }}" required>
+          </div>
+          <div class="form-group">
+            <label>Rol</label>
+            <select name="role">
+              <option value="technician" {% if u.role == 'technician' %}selected{% endif %}>Técnico</option>
+              <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Administrador</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-edit-{{ u.id }}" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

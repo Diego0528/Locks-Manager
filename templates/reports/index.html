@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Reportes{% endblock %}
+{% block page_title %}Reportes{% endblock %}
+
+{% block content %}
+
+<div class="section-row">
+  <!-- Quarterly Maintenance Report -->
+  <div class="card">
+    <div class="card-header">📋 Reporte de Mantenimiento Trimestral</div>
+    <div class="card-body">
+      <p class="text-muted text-small mb-16">
+        Genera el formato <strong>SIS.PHA.REG.026</strong> en Excel con todos los registros del trimestre seleccionado.
+      </p>
+      <form action="{{ url_for('reports.quarterly_excel') }}" method="get">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Trimestre</label>
+            <select name="quarter">
+              {% for q in range(1, 5) %}
+              <option value="{{ q }}" {% if q == current_quarter %}selected{% endif %}>
+                Trimestre {{ q }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Año</label>
+            <select name="year">
+              {% for y in years %}
+              <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-success mt-16 w-100">
+          📥 Descargar Excel — Formato SIS.PHA.REG.026
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Battery Report -->
+  <div class="card">
+    <div class="card-header">🔋 Reporte de Estado de Baterías</div>
+    <div class="card-body">
+      <p class="text-muted text-small mb-16">
+        Exporta el estado actual de batería de todas las cerraduras activas, ordenadas por sector.
+        Incluye últimos voltajes, porcentajes y alertas.
+      </p>
+      <div style="margin-bottom:16px;">
+        <div class="d-flex align-center gap-8 mb-8">
+          <span class="status-dot green"></span><span class="text-small">≥ 75% — Buen estado</span>
+        </div>
+        <div class="d-flex align-center gap-8 mb-8">
+          <span class="status-dot yellow"></span><span class="text-small">25–74% — Atención media</span>
+        </div>
+        <div class="d-flex align-center gap-8">
+          <span class="status-dot red"></span><span class="text-small">&lt; 25% — Cambio urgente</span>
+        </div>
+      </div>
+      <a href="{{ url_for('reports.battery_excel') }}" class="btn btn-success w-100">
+        📥 Descargar Reporte de Baterías
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">💡 Accesos Rápidos</div>
+  <div class="card-body">
+    <div class="d-flex gap-8" style="flex-wrap:wrap;">
+      <a href="{{ url_for('batteries.index', low=1) }}" class="btn btn-outline">
+        ⚠️ Ver Baterías Bajas
+      </a>
+      <a href="{{ url_for('maintenance.index') }}" class="btn btn-outline">
+        🔧 Mantenimiento Actual
+      </a>
+      <a href="{{ url_for('locks.index', status='active') }}" class="btn btn-outline">
+        🔒 Todas las Cerraduras
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

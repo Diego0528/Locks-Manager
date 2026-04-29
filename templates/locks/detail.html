@@ -1,0 +1,409 @@
+{% extends 'base.html' %}
+{% block title %}{{ lock.room_code }}{% endblock %}
+{% block page_title %}{{ lock.sector_name }} — {{ lock.room_code }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('locks.edit', lock_id=lock.id) }}" class="btn btn-outline btn-sm">✏️ Editar</a>
+<a href="{{ url_for('maintenance.form') }}?lock_id={{ lock.id }}" class="btn btn-primary btn-sm">🔧 Mantenimiento</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── INFO CARDS ─────────────────────────────── -->
+<div class="section-row mb-16">
+  <div class="card">
+    <div class="card-header">🔒 Información General</div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div>
+          <div class="stat-label">Código</div>
+          <div class="mono text-blue" style="font-size:1.4rem;font-weight:700;">{{ lock.room_code }}</div>
+        </div>
+        <div>
+          <div class="stat-label">Nombre</div>
+          <div>{{ lock.room_name or '—' }}</div>
+        </div>
+        <div>
+          <div class="stat-label">Sector</div>
+          <div>{{ lock.sector_name }}</div>
+        </div>
+        <div>
+          <div class="stat-label">Modelo</div>
+          <div class="mono">{{ lock.model }}</div>
+        </div>
+        <div>
+          <div class="stat-label">N° Serie</div>
+          <div class="mono">{{ lock.serial_number or '—' }}</div>
+        </div>
+        <div>
+          <div class="stat-label">Estado</div>
+          <div>
+            {% if lock.active %}
+            <span class="badge badge-success">● Activa</span>
+            {% else %}
+            <span class="badge badge-muted">● Inactiva</span>
+            {% endif %}
+          </div>
+        </div>
+        <div>
+          <div class="stat-label">Instalación</div>
+          <div>{{ lock.installation_date.strftime('%d/%m/%Y') if lock.installation_date else '—' }}</div>
+        </div>
+        <div>
+          <div class="stat-label">Últ. Config. Reloj</div>
+          <div>{{ lock.last_clock_config.strftime('%d/%m/%Y') if lock.last_clock_config else '—' }}</div>
+        </div>
+      </div>
+      {% if lock.notes %}
+      <div class="mt-16 text-muted text-small">📝 {{ lock.notes }}</div>
+      {% endif %}
+      <div class="mt-16 d-flex gap-8">
+        <form method="post" action="{{ url_for('locks.toggle', lock_id=lock.id) }}">
+          <button class="btn btn-outline btn-sm" data-confirm="¿Cambiar estado de la cerradura?">
+            {{ '🔴 Desactivar' if lock.active else '🟢 Activar' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🔋 Batería Actual</div>
+    <div class="card-body">
+      {% if last_battery %}
+        {% set color = last_battery.color %}
+        <div style="text-align:center;padding:10px 0;">
+          <div class="battery-widget" style="justify-content:center;gap:14px;">
+            <div class="battery-shell" style="width:80px;height:36px;">
+              <div class="battery-fill {{ color }}" style="width:{{ last_battery.percentage }}%;height:100%;"></div>
+            </div>
+          </div>
+          <div class="battery-pct {{ color }}" style="font-size:2.5rem;margin-top:10px;">
+            {{ last_battery.percentage }}%
+          </div>
+          <div class="text-muted mt-4 mono">{{ last_battery.voltage }}V</div>
+          <div class="text-muted text-small mt-4">
+            Lectura: {{ last_battery.reading_date.strftime('%d/%m/%Y') if last_battery.reading_date else '—' }}
+          </div>
+          {% if last_battery.batteries_changed %}
+          <div class="badge badge-info mt-8">🔋 Baterías cambiadas en esta lectura</div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <div class="empty-icon">🔋</div>
+          <p>Sin lecturas de batería registradas.</p>
+        </div>
+      {% endif %}
+      <a href="{{ url_for('batteries.log') }}?lock_id={{ lock.id }}" class="btn btn-primary w-100 mt-16">
+        + Registrar Lectura
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ── TABS ───────────────────────────────────── -->
+<div data-tabs-parent>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="maintenance">🔧 Mantenimientos ({{ maintenance_history|length }})</button>
+    <button class="tab-btn" data-tab="battery">🔋 Historial Batería ({{ battery_history|length }})</button>
+    <button class="tab-btn" data-tab="events">⚠️ Eventos ({{ events|length }})</button>
+    <button class="tab-btn" data-tab="clock">⏰ Config. Reloj ({{ clock_history|length }})</button>
+  </div>
+
+  <!-- Maintenance Tab -->
+  <div id="tab-maintenance" class="tab-content active">
+    <div class="card">
+      <div class="card-header">
+        Historial de Mantenimientos
+        <a href="{{ url_for('maintenance.form') }}?lock_id={{ lock.id }}" class="btn btn-primary btn-sm ml-auto">+ Nuevo</a>
+      </div>
+      <div class="table-wrap">
+        {% if maintenance_history %}
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Trimestre</th><th>Tipo</th><th>Estado</th><th>Técnico</th><th>Supervisor</th><th>Notas</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for m in maintenance_history %}
+            <tr class="{% if m.status == 'Realizado' %}maint-row-done{% elif m.status == 'Pospuesto' %}maint-row-post{% endif %}">
+              <td class="mono text-small">{{ m.maintenance_date.strftime('%d/%m/%Y') if m.maintenance_date else '—' }}</td>
+              <td class="td-muted">Q{{ m.quarter }} {{ m.year }}</td>
+              <td><span class="badge badge-{% if m.maintenance_type == 'Preventivo' %}info{% else %}warning{% endif %}">{{ m.maintenance_type }}</span></td>
+              <td>
+                {% if m.status == 'Realizado' %}<span class="badge badge-success">✓ Realizado</span>
+                {% elif m.status == 'Pospuesto' %}<span class="badge badge-muted">Pospuesto</span>
+                {% else %}<span class="badge badge-warning">Pendiente</span>{% endif %}
+              </td>
+              <td class="td-muted">{{ m.technician or '—' }}</td>
+              <td class="td-muted">{{ m.supervisor or '—' }}</td>
+              <td class="td-muted text-small">{{ (m.annotations or '')[:60] }}</td>
+              <td style="white-space:nowrap;">
+                <a href="{{ url_for('maintenance.form') }}?lock_id={{ lock.id }}&quarter={{ m.quarter }}&year={{ m.year }}"
+                   class="btn btn-ghost btn-sm" title="Editar">✏️</a>
+                <form method="post"
+                      action="{{ url_for('maintenance.delete', record_id=m.id) }}"
+                      style="display:inline;"
+                      onsubmit="return confirm('¿Eliminar este registro de mantenimiento? Esta acción no se puede deshacer.')">
+                  <button type="submit" class="btn btn-ghost btn-sm" title="Eliminar"
+                          style="color:var(--red);">🗑</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div class="empty-state"><div class="empty-icon">🔧</div><p>Sin mantenimientos registrados.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Battery Tab -->
+  <div id="tab-battery" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        Historial de Baterías
+        <a href="{{ url_for('batteries.log') }}?lock_id={{ lock.id }}" class="btn btn-primary btn-sm ml-auto">+ Log Batería</a>
+      </div>
+      {% if battery_history %}
+      <div class="card-body" style="padding-bottom:0;">
+        <div class="chart-container" style="height:180px;">
+          <canvas id="chart-battery"></canvas>
+        </div>
+      </div>
+      {% endif %}
+      <div class="table-wrap">
+        {% if battery_history %}
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Voltaje</th><th>Batería</th><th>¿Cambiadas?</th><th>Técnico</th><th>Notas</th></tr>
+          </thead>
+          <tbody>
+            {% for b in battery_history %}
+            <tr>
+              <td class="mono text-small">{{ b.reading_date.strftime('%d/%m/%Y') if b.reading_date else '—' }}</td>
+              <td class="mono">{{ b.voltage }}V</td>
+              <td>
+                <div class="battery-widget">
+                  <div class="battery-shell">
+                    <div class="battery-fill {{ b.color }}" style="width:{{ b.percentage }}%"></div>
+                  </div>
+                  <span class="battery-pct {{ b.color }}">{{ b.percentage }}%</span>
+                </div>
+              </td>
+              <td>{% if b.batteries_changed %}<span class="badge badge-info">✓ Sí</span>{% else %}<span class="td-muted">No</span>{% endif %}</td>
+              <td class="td-muted">{{ b.technician or '—' }}</td>
+              <td class="td-muted text-small">{{ b.notes or '' }}</td>
+              <td>
+                <form method="post"
+                      action="{{ url_for('batteries.delete_reading', reading_id=b.id) }}"
+                      style="display:inline;"
+                      onsubmit="return confirm('¿Eliminar esta lectura de batería?')">
+                  <button type="submit" class="btn btn-ghost btn-sm"
+                          style="color:var(--red);" title="Eliminar">🗑</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div class="empty-state"><div class="empty-icon">🔋</div><p>Sin lecturas de batería.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Events Tab -->
+  <div id="tab-events" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        Eventos / Incidentes
+        <button class="btn btn-outline btn-sm ml-auto" data-open-modal="modal-event">+ Nuevo Evento</button>
+      </div>
+      <div class="table-wrap">
+        {% if events %}
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for ev in events %}
+            <tr>
+              <td class="mono text-small">{{ ev.event_date.strftime('%d/%m/%Y') if ev.event_date else '—' }}</td>
+              <td><span class="badge badge-{% if ev.event_type == 'Falla' %}danger{% elif ev.event_type == 'Reparación' %}success{% else %}info{% endif %}">{{ ev.event_type }}</span></td>
+              <td class="td-muted text-small">{{ ev.description or '—' }}</td>
+              <td>
+                {% if ev.resolved %}
+                <span class="badge badge-success">✓ Resuelto</span>
+                {% else %}
+                <span class="badge badge-danger">Abierto</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if not ev.resolved %}
+                <form method="post" action="{{ url_for('locks.resolve_event', event_id=ev.id) }}" style="display:inline">
+                  <button class="btn btn-ghost btn-sm">✓ Resolver</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div class="empty-state"><div class="empty-icon">✅</div><p>Sin eventos registrados.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Clock Tab -->
+  <div id="tab-clock" class="tab-content">
+    <div class="card">
+      <div class="card-header">
+        Configuraciones de Reloj
+        <button class="btn btn-outline btn-sm ml-auto" data-open-modal="modal-clock">+ Registrar</button>
+      </div>
+      <div class="table-wrap">
+        {% if clock_history %}
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Técnico</th><th>Notas</th></tr>
+          </thead>
+          <tbody>
+            {% for c in clock_history %}
+            <tr>
+              <td class="mono text-small">{{ c.config_date.strftime('%d/%m/%Y') if c.config_date else '—' }}</td>
+              <td class="td-muted">{{ c.technician or '—' }}</td>
+              <td class="td-muted text-small">{{ c.notes or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <div class="empty-state"><div class="empty-icon">⏰</div><p>Sin configuraciones de reloj registradas.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODALES ─────────────────────────────────── -->
+<div id="modal-event" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      ⚠️ Registrar Evento
+      <button data-close-modal="modal-event" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('locks.add_event', lock_id=lock.id) }}">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Fecha</label>
+            <input type="date" name="event_date" required value="{{ now.date().isoformat() if now else '' }}">
+          </div>
+          <div class="form-group">
+            <label>Tipo</label>
+            <select name="event_type" required>
+              <option>Falla</option>
+              <option>Reparación</option>
+              <option>Inspección</option>
+              <option>Cambio de pieza</option>
+              <option>Cerradura nueva</option>
+              <option>Otro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group mt-8">
+          <label>Descripción</label>
+          <textarea name="description" rows="3" placeholder="Describe el evento…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-event" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-clock" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      ⏰ Configuración de Reloj
+      <button data-close-modal="modal-clock" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('locks.add_clock_config', lock_id=lock.id) }}">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Fecha de Configuración</label>
+            <input type="date" name="config_date" required>
+          </div>
+          <div class="form-group">
+            <label>Técnico</label>
+            <input type="text" name="technician" placeholder="Nombre…">
+          </div>
+        </div>
+        <div class="form-group mt-8">
+          <label>Notas</label>
+          <textarea name="notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" data-close-modal="modal-clock" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Battery history chart
+const battHist = {{ battery_history | tojson }};
+if (battHist.length && document.getElementById('chart-battery')) {
+  const labels = battHist.slice().reverse().map(b => b.reading_date ? b.reading_date.slice(0,10) : '');
+  const pcts   = battHist.slice().reverse().map(b => b.percentage);
+  const changed = battHist.slice().reverse().map(b => b.batteries_changed);
+
+  new Chart(document.getElementById('chart-battery'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Batería %',
+        data: pcts,
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,0.08)',
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: changed.map(c => c ? '#3b82f6' : '#10b981'),
+        pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterLabel: (ctx) => changed[ctx.dataIndex] ? '🔋 Baterías cambiadas' : ''
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } },
+        y: { min: 0, max: 100, ticks: { color: '#64748b' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

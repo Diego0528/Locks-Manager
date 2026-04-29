@@ -1,0 +1,243 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard — Q{{ stats.current_quarter }} {{ stats.current_year }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('maintenance.form') }}" class="btn btn-primary btn-sm">
+  ➕ Nuevo Mantenimiento
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── STAT CARDS ─────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card blue">
+    <span class="stat-icon">🔒</span>
+    <div class="stat-label">Cerraduras Activas</div>
+    <div class="stat-value">{{ stats.total_locks }}</div>
+    <div class="stat-sub">{{ stats.inactive_locks }} inactivas</div>
+  </div>
+
+  <div class="stat-card {% if stats.issues_count > 0 %}red{% else %}green{% endif %}">
+    <span class="stat-icon">⚠️</span>
+    <div class="stat-label">Eventos Abiertos</div>
+    <div class="stat-value">{{ stats.issues_count }}</div>
+    <div class="stat-sub">Requieren atención</div>
+  </div>
+
+  <div class="stat-card {% if stats.pct_done >= 80 %}green{% elif stats.pct_done >= 40 %}yellow{% else %}red{% endif %}">
+    <span class="stat-icon">🔧</span>
+    <div class="stat-label">Manto Q{{ stats.current_quarter }}</div>
+    <div class="stat-value">{{ stats.pct_done }}%</div>
+    <div class="stat-sub">{{ stats.done_this_quarter }} / {{ stats.scheduled_this_quarter }} realizados</div>
+  </div>
+
+  <div class="stat-card {% if stats.low_battery|length > 0 %}yellow{% else %}green{% endif %}">
+    <span class="stat-icon">🔋</span>
+    <div class="stat-label">Batería Baja</div>
+    <div class="stat-value">{{ stats.low_battery|length }}</div>
+    <div class="stat-sub">Debajo del 25%</div>
+  </div>
+</div>
+
+<!-- ── GRÁFICAS FILA 1 ────────────────────────── -->
+<div class="section-row">
+  <div class="card">
+    <div class="card-header">🔧 Progreso por Sector — Q{{ stats.current_quarter }} {{ stats.current_year }}</div>
+    <div class="card-body">
+      <div class="chart-container" style="height:200px;">
+        <canvas id="chart-sector-progress"></canvas>
+      </div>
+      <div class="mt-12">
+        <a href="{{ url_for('maintenance.index') }}" class="btn btn-outline btn-sm">
+          Ver listado completo →
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🔋 Distribución de Baterías</div>
+    <div class="card-body" style="display:flex;align-items:center;justify-content:center;">
+      <div class="chart-container" style="height:200px;max-width:260px;margin:0 auto;">
+        <canvas id="chart-battery-dist"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HISTORIAL TRIMESTRAL ────────────────────── -->
+<div class="card mb-16">
+  <div class="card-header">📊 Historial de Mantenimiento por Trimestre</div>
+  <div class="card-body">
+    <div class="chart-container" style="height:200px;">
+      <canvas id="chart-hist"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── BATERÍAS BAJAS ──────────────────────────── -->
+{% if stats.low_battery %}
+<div class="card mb-16">
+  <div class="card-header">
+    <span>⚠️ Alertas de Batería Baja</span>
+    <a href="{{ url_for('batteries.index', low=1) }}" class="btn btn-outline btn-sm ml-auto">Ver todas</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sector</th><th>Habitación</th><th>Voltaje</th><th>Batería</th><th>Última Lectura</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in stats.low_battery %}
+        <tr>
+          <td class="td-muted">{{ r.sector_name }}</td>
+          <td class="td-mono">{{ r.room_code }}</td>
+          <td class="mono">{{ r.voltage }}V</td>
+          <td>
+            <div class="battery-widget">
+              <div class="battery-shell">
+                <div class="battery-fill danger" style="width:{{ r.percentage }}%"></div>
+              </div>
+              <span class="battery-pct danger">{{ r.percentage }}%</span>
+            </div>
+          </td>
+          <td class="td-muted">{{ r.reading_date.strftime('%d/%m/%Y') if r.reading_date else '—' }}</td>
+          <td>
+            <a href="{{ url_for('batteries.log') }}?lock_id=..." class="btn btn-ghost btn-sm">Log</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── ÚLTIMOS MANTENIMIENTOS ─────────────────── -->
+<div class="card">
+  <div class="card-header">
+    <span>🕐 Mantenimientos Recientes</span>
+    <a href="{{ url_for('maintenance.index') }}" class="btn btn-ghost btn-sm ml-auto">Ver todos →</a>
+  </div>
+  <div class="table-wrap">
+    {% if stats.recent_maintenance %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Sector</th><th>Habitación</th>
+          <th>Técnico</th><th>Estado</th><th>Notas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in stats.recent_maintenance %}
+        <tr>
+          <td class="mono text-small">{{ r.maintenance_date.strftime('%d/%m/%Y') if r.maintenance_date else '—' }}</td>
+          <td class="td-muted">{{ r.sector_name }}</td>
+          <td class="td-mono">{{ r.room_code }}</td>
+          <td class="td-muted">{{ r.technician or '—' }}</td>
+          <td>
+            {% if r.status == 'Realizado' %}
+              <span class="badge badge-success">✓ Realizado</span>
+            {% elif r.status == 'Pospuesto' %}
+              <span class="badge badge-muted">Pospuesto</span>
+            {% else %}
+              <span class="badge badge-warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="td-muted text-small">{{ (r.annotations or '')[:50] }}{% if r.annotations and r.annotations|length > 50 %}…{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="empty-state"><div class="empty-icon">🔧</div><p>Sin registros de mantenimiento aún.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
+    y: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } }
+  }
+};
+
+// ── 1. Historial trimestral ───────────────────────────────────────────────
+const histData = {{ stats.maintenance_history | tojson }};
+if (histData.length) {
+  new Chart(document.getElementById('chart-hist'), {
+    type: 'bar',
+    data: {
+      labels: histData.map(h => `Q${h.quarter} ${h.year}`),
+      datasets: [
+        { label: 'Realizados', data: histData.map(h => h.done),
+          backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 4 },
+        { label: 'Total prog.', data: histData.map(h => h.total),
+          backgroundColor: 'rgba(59,130,246,0.25)', borderRadius: 4 }
+      ]
+    },
+    options: { ...CHART_OPTS }
+  });
+}
+
+// ── 2. Progreso por sector (horizontal bar) ───────────────────────────────
+const sectorData = {{ stats.sector_progress | tojson }};
+if (sectorData.length) {
+  new Chart(document.getElementById('chart-sector-progress'), {
+    type: 'bar',
+    data: {
+      labels: sectorData.map(s => s.sector_code),
+      datasets: [
+        { label: 'Realizados', data: sectorData.map(s => s.done || 0),
+          backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 4 },
+        { label: 'Programadas', data: sectorData.map(s => s.total),
+          backgroundColor: 'rgba(59,130,246,0.25)', borderRadius: 4 }
+      ]
+    },
+    options: {
+      ...CHART_OPTS,
+      indexAxis: 'y',
+      scales: {
+        x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' }, stacked: false },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+}
+
+// ── 3. Distribución de baterías (donut) ──────────────────────────────────
+const bd = {{ stats.battery_distribution | tojson }};
+if (bd) {
+  const vals = [bd.good||0, bd.medium||0, bd.low||0, bd.critical||0];
+  if (vals.some(v => v > 0)) {
+    new Chart(document.getElementById('chart-battery-dist'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Buena ≥75%', 'Media 25–74%', 'Baja 10–24%', 'Crítica <10%'],
+        datasets: [{
+          data: vals,
+          backgroundColor: ['#10b981','#f59e0b','#fb923c','#ef4444'],
+          borderColor: '#111827', borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 }, padding: 10 } }
+        }
+      }
+    });
+  }
+}
+</script>
+{% endblock %}
