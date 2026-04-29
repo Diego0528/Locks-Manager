@@ -24,6 +24,9 @@ env/
 *.xls
 *.csv
 
+# Configuration with secrets (use config.example.py as template)
+config.py
+
 # Environment / secrets
 .env
 .env.*
